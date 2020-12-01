@@ -2,9 +2,9 @@ package main
 
 import (
 	"fmt"
+	"mongoshake/collector/configure"
 	"mongoshake/collector/filter"
 	"mongoshake/common"
-	"mongoshake/collector/configure"
 )
 
 func SanitizeOptions() error {
@@ -239,8 +239,8 @@ func checkDefaultValue() error {
 
 	utils.AppDatabase = conf.Options.CheckpointStorageDb
 	utils.APPConflictDatabase = fmt.Sprintf("%s_%s", utils.AppDatabase, "_conflict")
-	filter.NsShouldBeIgnore[utils.AppDatabase + "."] = true
-	filter.NsShouldBeIgnore[utils.APPConflictDatabase + "."] = true
+	filter.NsShouldBeIgnore[utils.AppDatabase+"."] = true
+	filter.NsShouldBeIgnore[utils.APPConflictDatabase+"."] = true
 
 	return nil
 }
@@ -348,10 +348,10 @@ func checkConflict() error {
 		return fmt.Errorf("incr_sync.tunnel.address shouldn't be empty when incr_sync.tunnel != 'mock'")
 	}
 	conf.Options.IncrSyncCollisionEnable = conf.Options.IncrSyncExecutor != 1
-	if conf.Options.Tunnel != utils.VarTunnelDirect &&
-		conf.Options.SyncMode != utils.VarSyncModeIncr {
-		return fmt.Errorf("full sync only support when tunnel type == direct")
-	}
+	//if conf.Options.Tunnel != utils.VarTunnelDirect &&
+	//	conf.Options.SyncMode != utils.VarSyncModeIncr {
+	//	return fmt.Errorf("full sync only support when tunnel type == direct")
+	//}
 	// check source mongodb version >= 4.0 when change stream enable
 	if conf.Options.IncrSyncMongoFetchMethod == utils.VarIncrSyncMongoFetchMethodChangeStream {
 		if conf.Options.MongoSUrl == "" && len(conf.Options.MongoUrls) > 1 {
