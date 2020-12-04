@@ -2,20 +2,20 @@ package coordinator
 
 import (
 	"fmt"
-	"sync"
 	"math"
+	"sync"
 
-	"mongoshake/common"
 	"mongoshake/collector/configure"
-	"mongoshake/sharding"
-	"mongoshake/collector/filter"
 	"mongoshake/collector/docsyncer"
+	"mongoshake/collector/filter"
 	"mongoshake/collector/transform"
+	"mongoshake/common"
+	"mongoshake/sharding"
 
 	"github.com/gugemichael/nimo4go"
+	LOG "github.com/vinllen/log4go"
 	"github.com/vinllen/mgo"
 	"github.com/vinllen/mgo/bson"
-	LOG "github.com/vinllen/log4go"
 )
 
 func fetchChunkMap(isSharding bool) (sharding.ShardingChunkMap, error) {
@@ -109,6 +109,23 @@ func (coordinator *ReplicationCoordinator) startDocumentReplication() error {
 
 	// the source is sharding or replica-set
 	// fromIsSharding := len(coordinator.Sources) > 1 || fromConn0.IsMongos()
+	var err error
+
+	// create target client
+	if conf.Options.Tunnel == utils.VarTunnelDirect {
+		err = fullSyncToMongodb(coordinator)
+	} else if conf.Options.Tunnel == utils.VarTunnelMock {
+		err = fullSyncToES(coordinator)
+	}
+	if err != nil {
+		return err
+	}
+
+	LOG.Info("document syncer sync end")
+	return nil
+}
+
+func fullSyncToMongodb(coordinator *ReplicationCoordinator) error {
 
 	fromIsSharding := coordinator.SourceIsSharding()
 
@@ -139,7 +156,6 @@ func (coordinator *ReplicationCoordinator) startDocumentReplication() error {
 		return err
 	}
 
-	// create target client
 	toUrl := conf.Options.TunnelAddress[0]
 	var toConn *utils.MongoConn
 	if toConn, err = utils.NewMongoConn(toUrl, utils.VarMongoConnectModePrimary, true,
@@ -251,7 +267,7 @@ func (coordinator *ReplicationCoordinator) startDocumentReplication() error {
 					smallestNew = val.Newest
 				}
 			}
-			ckptMap = map[string]utils.TimestampNode {
+			ckptMap = map[string]utils.TimestampNode{
 				coordinator.MongoS.ReplicaName: {
 					Newest: smallestNew,
 				},
@@ -274,4 +290,89 @@ func (coordinator *ReplicationCoordinator) SourceIsSharding() bool {
 	} else {
 		return len(conf.Options.MongoUrls) > 1
 	}
+}
+
+func fullSyncToES(coordinator *ReplicationCoordinator) error {
+
+	nsSet, _, err := docsyncer.GetAllNamespace(coordinator.RealSourceFullSync)
+
+	if err != nil {
+		return err
+	}
+	LOG.Info("all namespace: %v", nsSet)
+
+	// get current newest timestamp
+	ckptMap, err := getTimestampMap(coordinator.MongoD)
+	if err != nil {
+		return err
+	}
+
+	trans := transform.NewNamespaceTransform(conf.Options.TransformNamespace)
+
+	qos := utils.StartQoS(0, int64(conf.Options.FullSyncReaderDocumentBatchSize), &utils.FullSentinelOptions.TPS)
+
+	// start sync each db
+	var wg sync.WaitGroup
+	var replError error
+	for i, src := range coordinator.RealSourceFullSync {
+		var orphanFilter *filter.OrphanFilter
+
+		toUrl := conf.Options.TunnelAddress[0]
+
+		esSyncer := docsyncer.NewESSyncer(i, src.URL, src.ReplicaName, toUrl, trans, orphanFilter, qos, true)
+		esSyncer.Init()
+		LOG.Info("ES syncer-%d do sync for url=%v", i, src.URL)
+
+		wg.Add(1)
+		nimo.GoRoutine(func() {
+			defer wg.Done()
+			if err := esSyncer.Start(); err != nil {
+				LOG.Critical("document replication for url=%v failed. %v",
+					utils.BlockMongoUrlPassword(src.URL, "***"), err)
+				replError = err
+			}
+			esSyncer.Close()
+		})
+	}
+
+	// start http server.
+	nimo.GoRoutine(func() {
+		// before starting, we must register all interface
+		if err := utils.FullSyncHttpApi.Listen(); err != nil {
+			LOG.Critical("start full sync server with port[%v] failed: %v", conf.Options.FullSyncHTTPListenPort,
+				err)
+		}
+	})
+
+	// wait all db finished
+	wg.Wait()
+	if replError != nil {
+		return replError
+	}
+
+	// update checkpoint after full sync
+	if conf.Options.SyncMode != utils.VarSyncModeFull {
+		// need merge to one when from mongos and fetch_mothod=="change_stream"
+		if coordinator.MongoS != nil && conf.Options.IncrSyncMongoFetchMethod == utils.VarIncrSyncMongoFetchMethodChangeStream {
+			var smallestNew bson.MongoTimestamp = math.MaxInt64
+			for _, val := range ckptMap {
+				if smallestNew > val.Newest {
+					smallestNew = val.Newest
+				}
+			}
+			ckptMap = map[string]utils.TimestampNode{
+				coordinator.MongoS.ReplicaName: {
+					Newest: smallestNew,
+				},
+			}
+		}
+
+		LOG.Info("try to set checkpoint with map[%v]", ckptMap)
+		if err := docsyncer.Checkpoint(ckptMap); err != nil {
+			return err
+		}
+	}
+	return nil
+	//docsyncer.StartDropDestIndex(nsSet, toConn, trans)
+	return nil
 }
