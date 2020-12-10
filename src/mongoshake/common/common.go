@@ -1,14 +1,13 @@
 package utils
 
 import (
+	"encoding/json"
 	"fmt"
 	"os"
 	"strings"
-	"encoding/json"
 
 	"github.com/nightlyone/lockfile"
 	LOG "github.com/vinllen/log4go"
-
 )
 
 // Build info
@@ -69,7 +68,7 @@ func InitialLogger(logDir, logFile, level string, logFlush bool, verbose bool) e
 	logLevel := parseLogLevel(level)
 	if verbose {
 		writer := LOG.NewConsoleLogWriter()
-		writer.SetFormat("[%D %T] [%L] %M")
+		writer.SetFormat("[%T %D] [%L] (%S) %M")
 		LOG.AddFilter("console", logLevel, writer)
 	}
 
@@ -92,7 +91,7 @@ func InitialLogger(logDir, logFile, level string, logFlush bool, verbose bool) e
 		fileLogger := LOG.NewFileLogWriter(fmt.Sprintf("%s/%s", logDir, logFile), true)
 		fileLogger.SetRotateDaily(true)
 		// fileLogger.SetFormat("[%D %T] [%L] [%s] %M") // print function
-		fileLogger.SetFormat("[%D %T] [%L] %M")
+		fileLogger.SetFormat("[%T %D] [%L] (%S) %M")
 		fileLogger.SetRotateMaxBackup(7)
 		LOG.AddFilter("file", logLevel, fileLogger)
 	} else {
@@ -101,7 +100,6 @@ func InitialLogger(logDir, logFile, level string, logFlush bool, verbose bool) e
 
 	return nil
 }
-
 
 func parseLogLevel(level string) LOG.Level {
 	switch strings.ToLower(level) {

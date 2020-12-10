@@ -6,13 +6,13 @@ import (
 	"flag"
 	"fmt"
 	"os"
-	"syscall"
 	"strconv"
+	"syscall"
 
 	"mongoshake/collector/configure"
+	"mongoshake/collector/coordinator"
 	"mongoshake/common"
 	"mongoshake/quorum"
-	"mongoshake/collector/coordinator"
 
 	"github.com/gugemichael/nimo4go"
 	LOG "github.com/vinllen/log4go"
@@ -71,7 +71,7 @@ func main() {
 	signalProfile, _ := strconv.Atoi(utils.SIGNALPROFILE)
 	signalStack, _ := strconv.Atoi(utils.SIGNALSTACK)
 	if signalProfile > 0 {
-		nimo.RegisterSignalForProfiling(syscall.Signal(signalProfile)) // syscall.SIGUSR2
+		nimo.RegisterSignalForProfiling(syscall.Signal(signalProfile))                     // syscall.SIGUSR2
 		nimo.RegisterSignalForPrintStack(syscall.Signal(signalStack), func(bytes []byte) { // syscall.SIGUSR1
 			LOG.Info(string(bytes))
 		})
@@ -128,7 +128,7 @@ func startup() {
 	}
 
 	if conf.Options.MongoCsUrl != "" {
-		coordinator.MongoCS = &utils.MongoSource {
+		coordinator.MongoCS = &utils.MongoSource{
 			URL: conf.Options.MongoCsUrl,
 		}
 	}
@@ -146,7 +146,7 @@ func startup() {
 	}
 
 	// do not exit
-	select{}
+	select {}
 }
 
 func selectLeader() {

@@ -85,7 +85,7 @@ func StartNamespaceSpecSyncForSharding(csUrl string, toConn *utils.MongoConn,
 	var fromConn *utils.MongoConn
 	var err error
 	if fromConn, err = utils.NewMongoConn(csUrl, utils.VarMongoConnectModePrimary, true,
-			utils.ReadWriteConcernMajority, utils.ReadWriteConcernDefault); err != nil {
+		utils.ReadWriteConcernMajority, utils.ReadWriteConcernDefault); err != nil {
 		return err
 	}
 	defer fromConn.Close()
@@ -163,7 +163,7 @@ func StartNamespaceSpecSyncForSharding(csUrl string, toConn *utils.MongoConn,
 }
 
 func StartIndexSync(indexMap map[utils.NS][]mgo.Index, toUrl string,
-		nsTrans *transform.NamespaceTransform, background bool) (syncError error) {
+	nsTrans *transform.NamespaceTransform, background bool) (syncError error) {
 	type IndexNS struct {
 		ns        utils.NS
 		indexList []mgo.Index
@@ -187,7 +187,7 @@ func StartIndexSync(indexMap map[utils.NS][]mgo.Index, toUrl string,
 	var conn *utils.MongoConn
 	var err error
 	if conn, err = utils.NewMongoConn(toUrl, utils.VarMongoConnectModePrimary, false,
-			utils.ReadWriteConcernDefault, utils.ReadWriteConcernMajority); err != nil {
+		utils.ReadWriteConcernDefault, utils.ReadWriteConcernMajority); err != nil {
 		return err
 	}
 	defer conn.Close()
@@ -247,7 +247,7 @@ type DBSyncer struct {
 	id int
 	// source mongodb url
 	FromMongoUrl string
-	fromReplset string
+	fromReplset  string
 	// destination mongodb url
 	ToMongoUrl string
 	// index of namespace
@@ -388,6 +388,7 @@ func (syncer *DBSyncer) Start() (syncError error) {
 }
 
 // start sync single collection
+// 在此读与写
 func (syncer *DBSyncer) collectionSync(collExecutorId int, ns utils.NS, toNS utils.NS) error {
 	// writer
 	colExecutor := NewCollectionExecutor(collExecutorId, syncer.ToMongoUrl, toNS, syncer)
@@ -531,13 +532,12 @@ func (syncer *DBSyncer) RestAPI() {
 		if ret.TotalCollection == 0 {
 			ret.Progress = "100%"
 		} else {
-			ret.Progress = fmt.Sprintf("%.2f%%", float64(ret.FinishedCollection) / float64(ret.TotalCollection) * 100)
+			ret.Progress = fmt.Sprintf("%.2f%%", float64(ret.FinishedCollection)/float64(ret.TotalCollection)*100)
 		}
 
 		return ret
 	})
 
 	/***************************************************/
-
 
 }

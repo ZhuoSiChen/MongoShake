@@ -129,7 +129,7 @@ func GetNewestTimestampByUrl(url string, fromMongoS bool) (bson.MongoTimestamp, 
 	var conn *MongoConn
 	var err error
 	if conn, err = NewMongoConn(url, VarMongoConnectModeSecondaryPreferred, true,
-			ReadWriteConcernDefault, ReadWriteConcernDefault); conn == nil || err != nil {
+		ReadWriteConcernDefault, ReadWriteConcernDefault); conn == nil || err != nil {
 		return 0, err
 	}
 	defer conn.Close()
@@ -150,7 +150,7 @@ func GetOldestTimestampByUrl(url string, fromMongoS bool) (bson.MongoTimestamp, 
 	var conn *MongoConn
 	var err error
 	if conn, err = NewMongoConn(url, VarMongoConnectModeSecondaryPreferred, true,
-			ReadWriteConcernDefault, ReadWriteConcernDefault); conn == nil || err != nil {
+		ReadWriteConcernDefault, ReadWriteConcernDefault); conn == nil || err != nil {
 		return 0, err
 	}
 	defer conn.Close()
@@ -162,7 +162,7 @@ func IsFromMongos(url string) (bool, error) {
 	var conn *MongoConn
 	var err error
 	if conn, err = NewMongoConn(url, VarMongoConnectModeSecondaryPreferred, true,
-			ReadWriteConcernDefault, ReadWriteConcernDefault); conn == nil || err != nil {
+		ReadWriteConcernDefault, ReadWriteConcernDefault); conn == nil || err != nil {
 		return false, err
 	}
 	return conn.IsMongos(), nil
@@ -175,6 +175,7 @@ type TimestampNode struct {
 }
 
 /*
+ * 从 oplog 根据传入的的mongoSource中取oplog中获取当前最新的时间与最旧的时间
  * get all newest timestamp
  * return:
  *     map: whole timestamp map, key: replset name, value: struct that includes the newest and oldest timestamp
@@ -183,7 +184,7 @@ type TimestampNode struct {
  *     error: error
  */
 func GetAllTimestamp(sources []*MongoSource) (map[string]TimestampNode, bson.MongoTimestamp,
-		bson.MongoTimestamp, bson.MongoTimestamp, bson.MongoTimestamp, error) {
+	bson.MongoTimestamp, bson.MongoTimestamp, bson.MongoTimestamp, error) {
 	smallestNew := bson.MongoTimestamp(math.MaxInt64)
 	biggestNew := bson.MongoTimestamp(0)
 	smallestOld := bson.MongoTimestamp(math.MaxInt64)
@@ -225,7 +226,7 @@ func GetAllTimestamp(sources []*MongoSource) (map[string]TimestampNode, bson.Mon
 
 // only used in unit test
 func GetAllTimestampInUT() (map[string]TimestampNode, bson.MongoTimestamp,
-		bson.MongoTimestamp, bson.MongoTimestamp, bson.MongoTimestamp, error) {
+	bson.MongoTimestamp, bson.MongoTimestamp, bson.MongoTimestamp, error) {
 	smallestNew := bson.MongoTimestamp(math.MaxInt64)
 	biggestNew := bson.MongoTimestamp(0)
 	smallestOld := bson.MongoTimestamp(math.MaxInt64)
@@ -344,7 +345,7 @@ func FindFirstErrorIndexAndMessage(error string) (int, string, bool) {
 	indexVal := 0
 	for i := index + len(subIndex); i < len(error) && error[i] != ']'; i++ {
 		// fmt.Printf("%c %d\n", rune(error[i]), int(error[i] - '0'))
-		indexVal = indexVal * 10 + int(error[i] - '0')
+		indexVal = indexVal*10 + int(error[i]-'0')
 	}
 
 	index = strings.Index(error, subMsg)
@@ -365,15 +366,16 @@ func FindFirstErrorIndexAndMessage(error string) (int, string, bool) {
 			stack += 1
 		}
 	}
-	msg := error[index + len(subMsg): i]
+	msg := error[index+len(subMsg) : i]
 
 	index = strings.Index(error, subDup)
 	if index == -1 {
 		return indexVal, msg, false
 	}
 	i = index + len(subMsg)
-	for ; i < len(error) && error[i] != ']'; i++ {}
-	dupVal := error[index + len(subMsg):i]
+	for ; i < len(error) && error[i] != ']'; i++ {
+	}
+	dupVal := error[index+len(subMsg) : i]
 
 	return indexVal, msg, dupVal == "true"
 }

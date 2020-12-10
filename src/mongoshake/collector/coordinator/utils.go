@@ -1,13 +1,13 @@
 package coordinator
 
 import (
-	"mongoshake/common"
-	"mongoshake/collector/configure"
 	"mongoshake/collector/ckpt"
+	"mongoshake/collector/configure"
+	"mongoshake/common"
 
-	"github.com/vinllen/mgo/bson"
-	LOG "github.com/vinllen/log4go"
 	"fmt"
+	LOG "github.com/vinllen/log4go"
+	"github.com/vinllen/mgo/bson"
 )
 
 /*
@@ -37,7 +37,7 @@ func (coordinator *ReplicationCoordinator) compareCheckpointAndDbTs(syncModeAll 
 		}
 	}
 
-	startTsMap = make(map[string]int64, len(tsMap) + 1)
+	startTsMap = make(map[string]int64, len(tsMap)+1)
 
 	LOG.Info("all node timestamp map: %v", tsMap)
 
@@ -84,7 +84,7 @@ func (coordinator *ReplicationCoordinator) compareCheckpointAndDbTs(syncModeAll 
 		}
 
 		if ckptRemote == nil {
-			if syncModeAll || confTsMongoTs > bson.MongoTimestamp(1 << 32) && ts.Oldest >= confTsMongoTs {
+			if syncModeAll || confTsMongoTs > bson.MongoTimestamp(1<<32) && ts.Oldest >= confTsMongoTs {
 				LOG.Info("%s syncModeAll[%v] ts.Oldest[%v], confTsMongoTs[%v]", replName, syncModeAll, ts.Oldest,
 					confTsMongoTs)
 				return smallestNew, nil, false, nil
@@ -121,7 +121,7 @@ func (coordinator *ReplicationCoordinator) selectSyncMode(syncMode string) (stri
 	if canIncrSync {
 		LOG.Info("sync mode run %v", utils.VarSyncModeIncr)
 		return utils.VarSyncModeIncr, startTsMap, 0, nil
-	} else if syncMode == utils.VarSyncModeIncr || conf.Options.Tunnel != utils.VarTunnelDirect {
+	} else if syncMode == utils.VarSyncModeIncr /*|| conf.Options.Tunnel != utils.VarTunnelDirect*/ {
 		// bugfix v2.4.11: if can not run incr sync directly, return error when sync_mode == "incr"
 		// bugfix v2.4.12: return error when tunnel != "direct"
 		return "", nil, 0, fmt.Errorf("start time illegal, can't run incr sync")

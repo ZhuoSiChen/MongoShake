@@ -164,7 +164,7 @@ func (factory *WriterFactory) Create(address []string, workerId uint32) Writer {
 	case utils.VarTunnelRpc:
 		return &RPCWriter{RemoteAddr: address[0]}
 	case utils.VarTunnelMock:
-		return &MockWriter{}
+		return &ESWriter{RemoteAddr: address[0]}
 	case utils.VarTunnelFile:
 		return &FileWriter{Local: address[0]}
 	case utils.VarTunnelDirect:

@@ -1,9 +1,9 @@
 package oplog
 
 import (
-	"reflect"
-	"fmt"
 	"encoding/json"
+	"fmt"
+	"reflect"
 
 	"github.com/vinllen/mgo/bson"
 	"strings"

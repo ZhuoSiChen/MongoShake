@@ -1,23 +1,27 @@
 package docsyncer
 
 import (
+	"context"
+	"encoding/json"
 	"errors"
 	"fmt"
+	"github.com/olivere/elastic"
 	"sync/atomic"
+	"time"
 
 	"mongoshake/collector/configure"
 	"mongoshake/common"
 	"mongoshake/oplog"
 
+	LOG "github.com/vinllen/log4go"
 	"github.com/vinllen/mgo"
 	"github.com/vinllen/mgo/bson"
-	LOG "github.com/vinllen/log4go"
 	"sync"
 )
 
 var (
 	GlobalCollExecutorId int32 = -1
-	GlobalDocExecutorId int32 = -1
+	GlobalDocExecutorId  int32 = -1
 )
 
 type CollectionExecutor struct {
@@ -37,28 +41,43 @@ type CollectionExecutor struct {
 
 	docBatch chan []*bson.Raw
 
+	docBatchWithNS chan []*bsonWithNS
+
 	// not own
-	syncer *DBSyncer
+	syncer   *DBSyncer
+	esSyncer *ESSyncer
+
+	esUrl string
 }
 
 func GenerateCollExecutorId() int {
 	return int(atomic.AddInt32(&GlobalCollExecutorId, 1))
 }
 
-func NewCollectionExecutor(id int, mongoUrl string, ns utils.NS, syncer *DBSyncer) *CollectionExecutor {
+func NewCollectionExecutorToES(id int, esUrl string, ns utils.NS, esSyncer *ESSyncer) *CollectionExecutor {
 	return &CollectionExecutor{
-		id:         id,
-		mongoUrl:   mongoUrl,
-		ns:         ns,
-		syncer:     syncer,
+		id:       id,
+		esUrl:    esUrl,
+		ns:       ns,
+		esSyncer: esSyncer,
 		// batchCount: 0,
 	}
 }
 
-func (colExecutor *CollectionExecutor) Start() error {
+func NewCollectionExecutor(id int, mongoUrl string, ns utils.NS, syncer *DBSyncer) *CollectionExecutor {
+	return &CollectionExecutor{
+		id:       id,
+		mongoUrl: mongoUrl,
+		ns:       ns,
+		syncer:   syncer,
+		// batchCount: 0,
+	}
+}
+
+func (colExecutor *CollectionExecutor) startToSyncToMongoDB() error {
 	var err error
 	if colExecutor.conn, err = utils.NewMongoConn(colExecutor.mongoUrl, utils.VarMongoConnectModePrimary, true,
-			utils.ReadWriteConcernDefault, utils.ReadWriteConcernDefault); err != nil {
+		utils.ReadWriteConcernDefault, utils.ReadWriteConcernDefault); err != nil {
 		return err
 	}
 	if conf.Options.FullSyncExecutorMajorityEnable {
@@ -78,6 +97,56 @@ func (colExecutor *CollectionExecutor) Start() error {
 	return nil
 }
 
+func (colExecutor *CollectionExecutor) Start() error {
+	if conf.Options.Tunnel == utils.VarTunnelDirect {
+		err := colExecutor.startToSyncToMongoDB()
+		return err
+	}
+	if conf.Options.Tunnel == utils.VarTunnelMock {
+		//同步到ES
+		err := colExecutor.startToSyncToES()
+		return err
+	}
+	return nil
+}
+
+//写进es的回调
+func afterBulk(executionID int64, requests []elastic.BulkableRequest, response *elastic.BulkResponse, err error) {
+	if response != nil && response.Errors {
+		failed := response.Failed()
+		if failed != nil {
+			for _, item := range failed {
+				if item.Status == 409 {
+					// ignore version conflict since this simply means the doc
+					// is already in the index
+					continue
+				}
+				json, err := json.Marshal(item)
+				if err != nil {
+					LOG.Error("Unable to marshal bulk response item: %s", err)
+				} else {
+					LOG.Error("Bulk response item: %s", string(json))
+				}
+			}
+		}
+	} else {
+		LOG.Error("ES Response %v", response)
+	}
+}
+
+func NewBulkProcessor(client *elastic.Client) (bulk *elastic.BulkProcessor, err error) {
+	bulkService := client.BulkProcessor().Name("monstache")
+	bulkService.Workers(1)
+	bulkService.Stats(true)
+	bulkService.BulkActions(-1)
+	bulkService.BulkSize(8 * 1024 * 1024)
+	bulkService.Backoff(&elastic.StopBackoff{})
+	bulkService.After(afterBulk)
+	bulkService.FlushInterval(time.Duration(5) * time.Second)
+	return bulkService.Do(context.Background())
+}
+
+//同步写的逻辑
 func (colExecutor *CollectionExecutor) Sync(docs []*bson.Raw) {
 	count := uint64(len(docs))
 	if count == 0 {
@@ -101,13 +170,84 @@ func (colExecutor *CollectionExecutor) Wait() error {
 	}*/
 
 	close(colExecutor.docBatch)
-	colExecutor.conn.Close()
+	if colExecutor.conn != nil {
+		colExecutor.conn.Close()
+	}
 
 	for _, exec := range colExecutor.executors {
 		if exec.error != nil {
 			return errors.New(fmt.Sprintf("sync ns %v failed. %v", colExecutor.ns, exec.error))
 		}
 	}
+	return nil
+}
+
+func (colExecutor *CollectionExecutor) StartForEs() error {
+
+	parallel := conf.Options.FullSyncReaderWriteDocumentParallel
+	colExecutor.docBatch = make(chan []*bson.Raw, parallel)
+	processor, err := NewBulkProcessor(colExecutor.esSyncer.client)
+	if err != nil {
+		return err
+	}
+	executors := make([]*DocExecutor, parallel)
+	for i := 0; i != len(executors); i++ {
+		executors[i] = NewDocExecutorToES(GenerateDocExecutorId(), colExecutor, processor, colExecutor.esSyncer)
+		go executors[i].start()
+	}
+	return nil
+}
+
+type bsonWithNS struct {
+	doc *bson.Raw
+	ns  utils.NS
+}
+
+func (colExecutor *CollectionExecutor) SyncToES(docs []*bson.Raw, ns utils.NS) {
+
+	count := uint64(len(docs))
+	if count == 0 {
+		return
+	}
+
+	var bsonToWriteToEs = make([]*bsonWithNS, count)
+	for i := 0; i < len(docs); i++ {
+		raw := docs[i]
+		withNS := &bsonWithNS{
+			doc: raw,
+			ns:  ns,
+		}
+		bsonToWriteToEs = append(bsonToWriteToEs, withNS)
+	}
+
+	/*
+	 * TODO, waitGroup.Add may overflow, so use atomic to replace waitGroup
+	 * // colExecutor.wg.Add(1)
+	 */
+	colExecutor.wg.Add(1)
+
+	colExecutor.docBatchWithNS <- bsonToWriteToEs
+
+}
+
+func (colExecutor *CollectionExecutor) startToSyncToES() error {
+	parallel := conf.Options.FullSyncReaderWriteDocumentParallel
+	colExecutor.docBatch = make(chan []*bson.Raw, parallel)
+
+	executors := make([]*DocExecutor, parallel)
+	//fixme 这里有问题
+	//此处对 ES 客户端不熟悉
+	for i := 0; i != len(executors); i++ {
+		//在此初始化写的executor
+		processor, err := NewBulkProcessor(colExecutor.esSyncer.client)
+		if err != nil {
+			LOG.Error("连不上es bulk")
+			return err
+		}
+		executors[i] = NewDocExecutorToES(GenerateDocExecutorId(), colExecutor, processor, colExecutor.esSyncer)
+		go executors[i].start()
+	}
+	colExecutor.executors = executors
 	return nil
 }
 
@@ -120,9 +260,11 @@ type DocExecutor struct {
 	session *mgo.Session
 
 	error error
-
 	// not own
-	syncer *DBSyncer
+	syncer   *DBSyncer
+	essyncer *ESSyncer
+
+	esbulk *elastic.BulkProcessor
 }
 
 func GenerateDocExecutorId() int {
@@ -138,12 +280,23 @@ func NewDocExecutor(id int, colExecutor *CollectionExecutor, session *mgo.Sessio
 	}
 }
 
+func NewDocExecutorToES(id int, colExecutor *CollectionExecutor, bulk *elastic.BulkProcessor, syncer *ESSyncer) *DocExecutor {
+	return &DocExecutor{
+		id:          id,
+		colExecutor: colExecutor,
+		esbulk:      bulk,
+		essyncer:    syncer,
+	}
+}
+
 func (exec *DocExecutor) String() string {
 	return fmt.Sprintf("DocExecutor[%v] collectionExecutor[%v]", exec.id, exec.colExecutor.ns)
 }
 
 func (exec *DocExecutor) start() {
-	defer exec.session.Close()
+	if conf.Options.Tunnel == utils.VarTunnelDirect {
+		defer exec.session.Close()
+	}
 	for {
 		docs, ok := <-exec.colExecutor.docBatch
 		if !ok {
@@ -176,38 +329,82 @@ func (exec *DocExecutor) doSync(docs []*bson.Raw) error {
 	}
 
 	// qps limit if enable
-	if exec.syncer.qos.Limit > 0 {
-		exec.syncer.qos.FetchBucket()
+	if conf.Options.Tunnel == utils.VarTunnelMock {
+		if exec.essyncer.qos.Limit > 0 {
+			exec.essyncer.qos.FetchBucket()
+		}
 	}
 
-	if conf.Options.LogLevel == utils.VarLogLevelDebug {
+	if conf.Options.Tunnel == utils.VarTunnelDirect {
+		if exec.syncer.qos.Limit > 0 {
+			exec.syncer.qos.FetchBucket()
+		}
 		var docBeg, docEnd bson.M
 		bson.Unmarshal(docs[0].Data, &docBeg)
-		bson.Unmarshal(docs[len(docs) - 1].Data, &docEnd)
+		bson.Unmarshal(docs[len(docs)-1].Data, &docEnd)
 		LOG.Debug("DBSyncer id[%v] doSync with table[%v] batch _id interval [%v, %v]", exec.syncer.id, ns,
+			docBeg["_id"], docEnd["_id"])
+	} else if conf.Options.Tunnel == utils.VarTunnelMock {
+		if exec.essyncer.qos.Limit > 0 {
+			exec.essyncer.qos.FetchBucket()
+		}
+		var docBeg, docEnd bson.M
+		bson.Unmarshal(docs[0].Data, &docBeg)
+		bson.Unmarshal(docs[len(docs)-1].Data, &docEnd)
+		LOG.Debug("ESSyncer id[%v] doSync with table[%v] batch _id interval [%v, %v]", exec.essyncer.id, ns,
 			docBeg["_id"], docEnd["_id"])
 	}
 
-	collectionHandler := exec.session.DB(ns.Database).C(ns.Collection)
-	bulk := collectionHandler.Bulk()
-	bulk.Insert(docList...)
-	if _, err := bulk.Run(); err != nil {
-		LOG.Warn("insert docs with length[%v] into ns[%v] of dest mongo failed[%v]",
-			len(docList), ns, err)
-		index, errMsg, dup := utils.FindFirstErrorIndexAndMessage(err.Error())
-		if index == -1 {
-			return fmt.Errorf("bulk run failed[%v]", err)
-		} else if !dup {
-			var docD bson.D
-			bson.Unmarshal(docs[index].Data, &docD)
-			return fmt.Errorf("bulk run message[%v], failed[%v], index[%v] dup[%v]", docD, errMsg, index, dup)
-		} else {
-			LOG.Warn("dup error found, try to solve error")
-		}
+	if conf.Options.LogLevel == utils.VarLogLevelDebug {
 
-		return exec.tryOneByOne(docList, index, collectionHandler)
 	}
+	//bson.Unmarshal(docs[0].Data,&m)
+	//id := m["_id"].(bson.ObjectId)
+	//LOG.Debug("aaaa [%v]",id.Hex())
+	if conf.Options.Tunnel == utils.VarTunnelDirect {
+		collectionHandler := exec.session.DB(ns.Database).C(ns.Collection)
+		bulk := collectionHandler.Bulk()
+		bulk.Insert(docList...)
+		if _, err := bulk.Run(); err != nil {
+			LOG.Warn("insert docs with length[%v] into ns[%v] of dest mongo failed[%v]",
+				len(docList), ns, err)
+			index, errMsg, dup := utils.FindFirstErrorIndexAndMessage(err.Error())
+			if index == -1 {
+				return fmt.Errorf("bulk run failed[%v]", err)
+			} else if !dup {
+				var docD bson.D
+				bson.Unmarshal(docs[index].Data, &docD)
+				return fmt.Errorf("bulk run message[%v], failed[%v], index[%v] dup[%v]", docD, errMsg, index, dup)
+			} else {
+				LOG.Warn("dup error found, try to solve error")
+			}
 
+			return exec.tryOneByOne(docList, index, collectionHandler)
+		}
+		//写入 ES
+	} else if conf.Options.Tunnel == utils.VarTunnelMock {
+
+		for i := 0; i < len(docs); i++ {
+			var m map[string]interface{}
+			bson.Unmarshal(docs[i].Data, &m)
+			LOG.Debug("%v", m["_id"])
+			req := elastic.NewBulkUpdateRequest()
+			req.UseEasyJSON(true)
+			//i2 := docList[i]
+			id := m["_id"].(bson.ObjectId)
+			//这里需要拿到 object Id 然后再把 m里面的 _id 删掉
+			req.Id(id.Hex())
+			delete(m, "_id")
+			req.Type("_doc")
+			req.Index(ns.Str())
+			req.Doc(m)
+			req.DocAsUpsert(true)
+			if _, err := req.Source(); err == nil {
+				exec.esbulk.Add(req)
+			}
+		}
+		//exec.esbulk
+	}
 	return nil
 }
 
@@ -240,7 +437,7 @@ func (exec *DocExecutor) tryOneByOne(input []interface{}, index int, collectionH
 		}
 
 		if !conf.Options.FullSyncExecutorInsertOnDupUpdate {
-			return fmt.Errorf("duplicate key error[%v], you can clean the document on the target mongodb, " +
+			return fmt.Errorf("duplicate key error[%v], you can clean the document on the target mongodb, "+
 				"or enable %v to solve, but full-sync stage needs restart",
 				err, "full_sync.executor.insert_on_dup_update")
 		} else {
