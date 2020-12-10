@@ -129,10 +129,12 @@ func afterBulk(executionID int64, requests []elastic.BulkableRequest, response *
 				}
 			}
 		}
+	} else {
+		LOG.Error("ES Response %v", response)
 	}
 }
 
-func newBulkProcessor(client *elastic.Client) (bulk *elastic.BulkProcessor, err error) {
+func NewBulkProcessor(client *elastic.Client) (bulk *elastic.BulkProcessor, err error) {
 	bulkService := client.BulkProcessor().Name("monstache")
 	bulkService.Workers(1)
 	bulkService.Stats(true)
@@ -184,7 +186,7 @@ func (colExecutor *CollectionExecutor) StartForEs() error {
 
 	parallel := conf.Options.FullSyncReaderWriteDocumentParallel
 	colExecutor.docBatch = make(chan []*bson.Raw, parallel)
-	processor, err := newBulkProcessor(colExecutor.esSyncer.client)
+	processor, err := NewBulkProcessor(colExecutor.esSyncer.client)
 	if err != nil {
 		return err
 	}
@@ -237,7 +239,7 @@ func (colExecutor *CollectionExecutor) startToSyncToES() error {
 	//此处对 ES 客户端不熟悉
 	for i := 0; i != len(executors); i++ {
 		//在此初始化写的executor
-		processor, err := newBulkProcessor(colExecutor.esSyncer.client)
+		processor, err := NewBulkProcessor(colExecutor.esSyncer.client)
 		if err != nil {
 			LOG.Error("连不上es bulk")
 			return err
@@ -337,14 +339,24 @@ func (exec *DocExecutor) doSync(docs []*bson.Raw) error {
 		if exec.syncer.qos.Limit > 0 {
 			exec.syncer.qos.FetchBucket()
 		}
-	}
-
-	if conf.Options.LogLevel == utils.VarLogLevelDebug {
 		var docBeg, docEnd bson.M
 		bson.Unmarshal(docs[0].Data, &docBeg)
 		bson.Unmarshal(docs[len(docs)-1].Data, &docEnd)
-		LOG.Debug("DBSyncer id[%v] doSync with table[%v] batch _id interval [%v, %v]", exec.essyncer.id, ns,
+		LOG.Debug("DBSyncer id[%v] doSync with table[%v] batch _id interval [%v, %v]", exec.syncer.id, ns,
 			docBeg["_id"], docEnd["_id"])
+	} else if conf.Options.Tunnel == utils.VarTunnelMock {
+		if exec.essyncer.qos.Limit > 0 {
+			exec.essyncer.qos.FetchBucket()
+		}
+		var docBeg, docEnd bson.M
+		bson.Unmarshal(docs[0].Data, &docBeg)
+		bson.Unmarshal(docs[len(docs)-1].Data, &docEnd)
+		LOG.Debug("ESSyncer id[%v] doSync with table[%v] batch _id interval [%v, %v]", exec.essyncer.id, ns,
+			docBeg["_id"], docEnd["_id"])
+	}
+
+	if conf.Options.LogLevel == utils.VarLogLevelDebug {
+
 	}
 	//bson.Unmarshal(docs[0].Data,&m)
 	//id := m["_id"].(bson.ObjectId)
