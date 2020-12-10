@@ -1,0 +1,68 @@
+startOplogReplication() 66
+	go syncer.Start() 218 //死循环拉取 
+		sync.poll()   504 //在此拉取
+			sync.reader.StartFetcher() // start reader fetcher if not exist
+				go or.fetcher()
+					for { //死循环拉取
+					log = new(bson.Raw)
+					if !or.oplogsIterator.Next(log) {
+					or.oplogChan <- &retOplog{log.Data, nil}  //读取到 oplogChan 
+
+			sync.next() 在此读
+				sync.persister.Inject(log)
+					if p.enableDiskPersist // persister对象允许持久化到磁盘吗
+					else p.PushToPendingQueue(input)
+							p.Buffer = append(p.Buffer, input)  //添加到 p.Buffer当接收到一个input 为 nil的时候会执行下面逻辑
+							flush = true
+							p.sync.PendingQueue[selected] <- p.Buffer
+		sync.startDeserializer()
+			go sync.deserializer(index)//此方法会根据全局配置的是oplog或者changesteam 去匹配对应的解析器
+				conf.Options.IncrSyncMongoFetchMethod == utils.VarIncrSyncMongoFetchMethodChangeStream
+				for { //死循环从 准备队列里读取 oplog
+				batchRawLogs := <-sync.PendingQueue[index] 
+				deserializeLogs = append(deserializeLogs, combiner(rawLog, log))
+				sync.LastFetchTs = deserializeLogs[0].Parsed.Timestamp
+				sync.logsQueue[index] <- deserializeLogs //写入logsQueue[index]中去
+batcher 执行逻辑
+	startBatcher()
+		nimo.GoRoutineInLoop(func() //死循环
+		batchedOplog, barrier, allEmpty, exit := batcher.BatchMore()	
+			mergeBatch, exit := batcher.getBatchWithDelay()
+				mergeBatch = batcher.getBatch()
+					/*
+					 * first part of merge batch is from current logs queue.
+					 * we have 3 judgements:
+					 * 1. if logs queue isn't empty, we return immediately. if not, goto 2 or 3.
+					 * 2. if the previous log isn't empty which means this log needs to be flushed
+					 * as soon as possible, so we wait at most 1 second.
+					 * 3. if the previous log is empty, we wait 10s same as the noop oplog interval
+					 */
+					mergeBatch = <-syncer.logsQueue[batcher.currentQueue()]:
+					for len(mergeBatch) < conf.Options.IncrSyncAdaptiveBatchingMaxSize &&
+						len(syncer.logsQueue[batcher.currentQueue()]) > 0 {
+						// there has more pushed oplogs in next logs queue (read can't to be block)
+						// Hence, we fetch them by the way. and merge together
+						mergeBatch = append(mergeBatch, <-syncer.logsQueue[batcher.nextQueue]...)
+						batcher.moveToNextQueue()
+					}
+				for i, genericLog := range mergeBatch {
+				mergeBatch = batcher.utBatchesDelay.injectBatch
+		if exit { //判断是否需要退出
+		else if log, filterLog := batcher.getLastOplog(); log != nil && !allEmpty { //拿出最新的getLastOplog
+		// push to worker
+		if worked := batcher.dispatchBatches(batchedOplog); worked {//下发到worker
+			batcher.workerGroup[i].Offer(batch)
+				worker.queue <- batch
+		newestTs = log.Timestamp //从log 里拿出时间 
+		sync.replMetric.SetLSN(utils.TimestampToInt64(newestTs))
+		// update latest fetched timestamp in memory
+		sync.reader.UpdateQueryTimestamp(newestTs)
+		// flush checkpoint value
+		sync.checkpoint(barrier, 0)//更新checkpoint时间
+		sync.checkCheckpointUpdate(barrier, newestTs) // check if need
+startOplogReplication()
+	go w.StartWorker()
+		if batch = worker.findFirstAvailableBatch(); batch == nil {
+			for {
+			select {
+			case batch = <-worker.queue:
