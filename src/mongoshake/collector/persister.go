@@ -3,17 +3,17 @@ package collector
 // persist oplog on disk
 
 import (
-	"mongoshake/oplog"
 	"mongoshake/collector/configure"
-	"sync"
 	"mongoshake/common"
+	"mongoshake/oplog"
+	"sync"
 	"sync/atomic"
 	"time"
 
-	"github.com/vinllen/mgo/bson"
-	LOG "github.com/vinllen/log4go"
-	"github.com/vinllen/go-diskqueue"
 	"github.com/gugemichael/nimo4go"
+	"github.com/vinllen/go-diskqueue"
+	LOG "github.com/vinllen/log4go"
+	"github.com/vinllen/mgo/bson"
 )
 
 const (
@@ -49,10 +49,9 @@ func NewPersister(replset string, sync *OplogSyncer) *Persister {
 		sync:              sync,
 		Buffer:            make([][]byte, 0, conf.Options.IncrSyncFetcherBufferCapacity),
 		nextQueuePosition: 0,
-		enableDiskPersist: conf.Options.SyncMode == utils.VarSyncModeAll &&
-			conf.Options.FullSyncReaderOplogStoreDisk,
-		fetchStage:      utils.FetchStageStoreUnknown,
-		diskQueueLastTs: -1, // initial set 1
+		enableDiskPersist: conf.Options.FullSyncReaderOplogStoreDisk,
+		fetchStage:        utils.FetchStageStoreUnknown,
+		diskQueueLastTs:   -1, // initial set 1
 	}
 
 	return p
@@ -199,6 +198,7 @@ func (p *Persister) PushToPendingQueue(input []byte) {
 	}
 }
 
+//三秒持久化一次
 func (p *Persister) retrieve() {
 	for range time.NewTicker(3 * time.Second).C {
 		stage := atomic.LoadInt32(&p.fetchStage)
