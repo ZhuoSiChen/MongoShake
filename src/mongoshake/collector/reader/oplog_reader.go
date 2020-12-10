@@ -5,11 +5,11 @@ package sourceReader
 import (
 	"errors"
 	"fmt"
-	"sync"
-	"time"
 	"mongoshake/collector/configure"
 	"mongoshake/common"
 	"mongoshake/oplog"
+	"sync"
+	"time"
 
 	LOG "github.com/vinllen/log4go"
 	"github.com/vinllen/mgo"
@@ -22,7 +22,7 @@ const (
 	QueryOpGT  = "$gt"
 	QueryOpGTE = "$gte"
 
-	tailTimeout   = 7
+	tailTimeout = 7
 
 	localDB = "local"
 )
@@ -50,18 +50,18 @@ type OplogReader struct {
 	fetcherExist bool
 	fetcherLock  sync.Mutex
 
-	firstRead       bool
+	firstRead bool
 }
 
 // NewOplogReader creates reader with mongodb url
 func NewOplogReader(src string, replset string) *OplogReader {
 	return &OplogReader{
-		src:             src,
-		replset:         replset,
-		query:           bson.M{},
+		src:     src,
+		replset: replset,
+		query:   bson.M{},
 		// the mgo driver already has cache mechanism(prefetch), so there is no need to buffer here again
-		oplogChan:       make(chan *retOplog, 0),
-		firstRead:       true,
+		oplogChan: make(chan *retOplog, 0),
+		firstRead: true,
 	}
 }
 
@@ -134,6 +134,8 @@ func (or *OplogReader) StartFetcher() {
 }
 
 // fetch oplog tp store disk queue or memory
+//读取 oplog
+//一秒读取
 func (or *OplogReader) fetcher() {
 	LOG.Info("start fetcher with src[%v] replica-name[%v] query-ts[%v]",
 		utils.BlockMongoUrlPassword(or.src, "***"), or.replset,
@@ -183,7 +185,7 @@ func (or *OplogReader) EnsureNetwork() (err error) {
 		}
 		// reconnect
 		if or.conn, err = utils.NewMongoConn(or.src, conf.Options.MongoConnectMode, true,
-				utils.ReadWriteConcernDefault, utils.ReadWriteConcernDefault); or.conn == nil || err != nil {
+			utils.ReadWriteConcernDefault, utils.ReadWriteConcernDefault); or.conn == nil || err != nil {
 			err = fmt.Errorf("oplog_reader reconnect mongo instance [%s] error. %s", or.src, err.Error())
 			return err
 		}

@@ -7,10 +7,10 @@ import (
 	"mongoshake/collector/ckpt"
 	"mongoshake/collector/configure"
 	"mongoshake/collector/filter"
+	"mongoshake/collector/reader"
 	"mongoshake/common"
 	"mongoshake/oplog"
 	"mongoshake/quorum"
-	"mongoshake/collector/reader"
 
 	"github.com/gugemichael/nimo4go"
 	LOG "github.com/vinllen/log4go"
@@ -228,7 +228,7 @@ func (sync *OplogSyncer) startBatcher() {
 	var batcher = sync.batcher
 	filterCheckTs := time.Now()
 	filterFlag := false // marks whether previous log is filter
-
+	//死循环的批量读取oplog 与处理 oplog
 	nimo.GoRoutineInLoop(func() {
 		/*
 		 * judge self is master?
@@ -624,8 +624,8 @@ func (sync *OplogSyncer) RestAPI() {
 		LsnAck      *MongoTime `json:"lsn_ack"`
 		LsnCkpt     *MongoTime `json:"lsn_ckpt"`
 		Now         *Time      `json:"now"`
-		OplogAvg    string      `json:"log_size_avg"`
-		OplogMax    string      `json:"log_size_max"`
+		OplogAvg    string     `json:"log_size_avg"`
+		OplogMax    string     `json:"log_size_max"`
 	}
 
 	// total replication info
