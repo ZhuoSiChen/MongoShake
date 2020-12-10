@@ -3,17 +3,20 @@ package coordinator
 import (
 	"errors"
 
-	"mongoshake/common"
 	"mongoshake/collector"
 	"mongoshake/collector/configure"
+	"mongoshake/common"
 
+	"fmt"
 	"github.com/gugemichael/nimo4go"
 	LOG "github.com/vinllen/log4go"
-	"fmt"
 )
 
+//启动 oplog 复制
+// 读取 oplog start position 开始的时间与 fullSyncFinishPosition 结束时间点的oplog
+// 会默认
 func (coordinator *ReplicationCoordinator) startOplogReplication(oplogStartPosition, fullSyncFinishPosition int64,
-		startTsMap map[string]int64) error {
+	startTsMap map[string]int64) error {
 	// replicate speed limit on all syncer
 	coordinator.rateController = nimo.NewSimpleRateController()
 
@@ -43,6 +46,7 @@ func (coordinator *ReplicationCoordinator) startOplogReplication(oplogStartPosit
 	coordinator.syncerGroup[0].SyncGroup = coordinator.syncerGroup
 
 	// prepare worker routine and bind it to syncer
+	//启动syncer的worker
 	for i := 0; i < conf.Options.IncrSyncWorker; i++ {
 		syncer := coordinator.syncerGroup[i%len(coordinator.syncerGroup)]
 		w := collector.NewWorker(syncer, uint32(i))
@@ -58,13 +62,13 @@ func (coordinator *ReplicationCoordinator) startOplogReplication(oplogStartPosit
 		syncer.Bind(w)
 		go w.StartWorker()
 	}
-
+	//启动 oplog 拉取
 	for _, syncer := range coordinator.syncerGroup {
 		go syncer.Start()
 	}
 
 	// start http server
-	nimo.GoRoutine(func(){
+	nimo.GoRoutine(func() {
 		if err := utils.IncrSyncHttpApi.Listen(); err != nil {
 			LOG.Critical("start incr sync server with port[%v] failed: %v", conf.Options.IncrSyncHTTPListenPort,
 				err)
