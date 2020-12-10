@@ -54,7 +54,7 @@ type ESSyncer struct {
 
 func NewESSyncer(id int, fromMongoUrl string, fromReplset string, toMongoUrl string, nsTrans *transform.NamespaceTransform, orphanFilter *filter.OrphanFilter, qos *utils.Qos, fromIsSharding bool) *ESSyncer {
 
-	client, err := newElasticClient(toMongoUrl)
+	client, err := NewElasticClient(toMongoUrl)
 	if err != nil {
 		return nil
 	}
@@ -267,7 +267,7 @@ func StartDropDestIndex() {
 
 }
 
-func newElasticClient(esUrl string) (client *elastic.Client, err error) {
+func NewElasticClient(esUrl string) (client *elastic.Client, err error) {
 
 	var clientOptions []elastic.ClientOptionFunc
 	transport := &http.Transport{
