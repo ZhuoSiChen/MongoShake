@@ -8,10 +8,10 @@ import (
 	"mongoshake/common"
 	"mongoshake/oplog"
 
+	"fmt"
 	LOG "github.com/vinllen/log4go"
 	"github.com/vinllen/mgo"
 	"github.com/vinllen/mgo/bson"
-	"fmt"
 	"sync/atomic"
 )
 
@@ -23,7 +23,7 @@ func (exec *Executor) ensureConnection() bool {
 	// reconnect if necessary
 	if exec.session == nil {
 		if conn, err := utils.NewMongoConn(exec.MongoUrl, utils.VarMongoConnectModePrimary, true,
-				utils.ReadWriteConcernDefault, utils.ReadWriteConcernDefault); err != nil {
+			utils.ReadWriteConcernDefault, utils.ReadWriteConcernDefault); err != nil {
 			LOG.Critical("Connect to mongo cluster failed. %v", err)
 			return false
 		} else {
