@@ -56,7 +56,7 @@ func (sync *OplogSyncer) loadCheckpoint() error {
 	}
 
 	// check if checkpoint real ts >= checkpoint disk last ts
-	if checkpoint.OplogDiskQueueFinishTs > 0 && checkpoint.Timestamp >= checkpoint.OplogDiskQueueFinishTs {
+	if checkpoint.OplogDiskQueueFinishTs > 1 && checkpoint.Timestamp >= checkpoint.OplogDiskQueueFinishTs {
 		// no need to init disk queue again
 		sync.persister.SetFetchStage(utils.FetchStageStoreMemoryApply)
 		return nil
@@ -65,7 +65,7 @@ func (sync *OplogSyncer) loadCheckpoint() error {
 	// TODO, there is a bug if MongoShake restarts
 
 	// need to init
-	sync.persister.SetFetchStage(utils.FetchStageStoreDiskNoApply)
+	sync.persister.SetFetchStage(utils.FetchStageStoreMemoryApply)
 	sync.persister.InitDiskQueue(checkpoint.OplogDiskQueue)
 	return nil
 }
@@ -89,7 +89,7 @@ func (sync *OplogSyncer) checkpoint(flush bool, inputTs bson.MongoTimestamp) {
 	// we can't get the correct worker ack offset since collector have lost
 	// the unack offset...
 	if !flush && conf.Options.Tunnel != utils.VarTunnelDirect &&
-		now.Before(sync.startTime.Add(1 * time.Minute)) {
+		now.Before(sync.startTime.Add(1*time.Minute)) {
 		// LOG.Info("CheckpointOperation requires three minutes at least to flush receiver's buffer")
 		return
 	}
@@ -189,4 +189,3 @@ func (sync *OplogSyncer) calculateWorkerLowestCheckpoint() (v int64, err error) 
 	LOG.Info("worker offset %v use lowest %v", candidates, utils.ExtractTimestampForLog(candidates[0]))
 	return candidates[0], nil
 }
-
