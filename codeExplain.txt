@@ -8,6 +8,8 @@ startOplogReplication() 66
 					if !or.oplogsIterator.Next(log) {
 					or.oplogChan <- &retOplog{log.Data, nil}  //读取到 oplogChan 
 
+
+
 			sync.next() 在此读
 				sync.persister.Inject(log)
 					if p.enableDiskPersist // persister对象允许持久化到磁盘吗
