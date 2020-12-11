@@ -10,6 +10,7 @@ startOplogReplication() 66
 
 
 
+
 			sync.next() 在此读
 				sync.persister.Inject(log)
 					if p.enableDiskPersist // persister对象允许持久化到磁盘吗
