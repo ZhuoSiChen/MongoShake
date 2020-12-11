@@ -6,7 +6,9 @@ startOplogReplication() 66
 					for { //死循环拉取
 					log = new(bson.Raw)
 					if !or.oplogsIterator.Next(log) {
-					or.oplogChan <- &retOplog{log.Data, nil}  //读取到 oplogChan 
+					or.oplogChan <- &retOplog{log.Data, nil}  //读取到 oplogChan
+
+
 
 
 
