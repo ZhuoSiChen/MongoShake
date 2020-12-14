@@ -29,6 +29,7 @@ require (
 	github.com/rcrowley/go-metrics v0.0.0-20190826022208-cac0b30c2563
 	github.com/stretchr/testify v1.6.1
 	github.com/vinllen/go-diskqueue v1.0.1
+	//github.com/vinllen/go-diskqueue v1.0.1
 	github.com/vinllen/log4go v0.0.0-20180514124125-3848a366df9d
 	github.com/vinllen/mgo v0.0.0-20200603094852-6e8a76964ea9
 	github.com/xdg/scram v0.0.0-20180814205039-7eeb5667e42c // indirect
@@ -41,3 +42,5 @@ require (
 	gopkg.in/jcmturner/gokrb5.v7 v7.3.0 // indirect
 	gopkg.in/jcmturner/rpc.v1 v1.1.0 // indirect
 )
+
+replace github.com/vinllen/go-diskqueue v1.0.1 => github.com/ZhuoSiChen/go-diskqueue v1.0.2-0.20201214112523-dda975372199
