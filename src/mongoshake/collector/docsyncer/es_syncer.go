@@ -75,7 +75,7 @@ func NewESSyncer(id int, fromMongoUrl string, fromReplset string, toMongoUrl str
 }
 
 func (esSyncer *ESSyncer) Init() {
-
+	esSyncer.RestAPI()
 }
 
 func (syncer *ESSyncer) Start() (syncError error) {
@@ -155,7 +155,7 @@ func (syncer *ESSyncer) collectionSync(collExecutorId int, ns utils.NS, toNS uti
 	}
 
 	// splitter reader
-	//在这里读取数据库 collection 与document
+	//在这里拆分collection与document
 	splitter := NewDocumentSplitter(syncer.FromMongoUrl, ns)
 	if splitter == nil {
 		return fmt.Errorf("create splitter failed")
@@ -170,6 +170,7 @@ func (syncer *ESSyncer) collectionSync(collExecutorId int, ns utils.NS, toNS uti
 	// run in several pieces
 	var wg sync.WaitGroup
 	wg.Add(splitter.pieceNumber)
+	// 4 个 groutine 读一个 ns
 	for i := 0; i < SpliterReader; i++ {
 		go func() {
 			for {
@@ -264,6 +265,50 @@ func (esSyncer *ESSyncer) splitSync(reader *DocumentReader, colExecutor *Collect
 }
 
 func StartDropDestIndex() {
+
+}
+func (syncer *ESSyncer) RestAPI() {
+	// progress api
+	type OverviewInfo struct {
+		Progress             string            `json:"progress"`                     // synced_collection_number / total_collection_number
+		TotalCollection      int               `json:"total_collection_number"`      // total collection
+		FinishedCollection   int               `json:"finished_collection_number"`   // finished
+		ProcessingCollection int               `json:"processing_collection_number"` // in processing
+		WaitCollection       int               `json:"wait_collection_number"`       // wait start
+		CollectionMetric     map[string]string `json:"collection_metric"`            // collection_name -> process
+	}
+	LOG.Debug("start end point in /progress")
+	utils.FullSyncHttpApi.RegisterAPI("/progress", nimo.HttpGet, func([]byte) interface{} {
+		ret := OverviewInfo{
+			CollectionMetric: make(map[string]string),
+		}
+
+		syncer.metricNsMapLock.Lock()
+		defer syncer.metricNsMapLock.Unlock()
+
+		ret.TotalCollection = len(syncer.metricNsMap)
+		for ns, collectionMetric := range syncer.metricNsMap {
+			ret.CollectionMetric[ns.Str()] = collectionMetric.String()
+			switch collectionMetric.CollectionStatus {
+			case StatusWaitStart:
+				ret.WaitCollection += 1
+			case StatusProcessing:
+				ret.ProcessingCollection += 1
+			case StatusFinish:
+				ret.FinishedCollection += 1
+			}
+		}
+
+		if ret.TotalCollection == 0 {
+			ret.Progress = "100%"
+		} else {
+			ret.Progress = fmt.Sprintf("%.2f%%", float64(ret.FinishedCollection)/float64(ret.TotalCollection)*100)
+		}
+
+		return ret
+	})
+
+	/***************************************************/
 
 }
 
