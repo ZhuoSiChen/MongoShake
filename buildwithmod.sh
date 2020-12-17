@@ -70,6 +70,8 @@ for g in "${goos[@]}"; do
         build_info=$info
     fi
 
+    cd "src/mongoshake"
+    go mod tidy
     for i in "${modules[@]}" ; do
         echo "Build ""$i"
 
@@ -77,8 +79,7 @@ for g in "${goos[@]}"; do
         build_dir="mongoshake/$i/main"
 
         # build
-        cd "src/mongoshake"
-        go mod tidy
+
 #        go build -v -ldflags '-X mongoshake/common.BRANCH=unknown,0.0,debug,go1.15.6,2020-12-16_19:54:17 -X mongoshake/common.SIGNALPROFILE=31 -X mongoshake/common.SIGNALSTACK=30' '-gcflags=-N -l' -o bin/collector.linux -tags debug src/mongoshake/collector/main/collector.go src/mongoshake/collector/main/sanitize.go
 
         if [ $DEBUG -eq 1 ]; then
@@ -87,12 +88,12 @@ for g in "${goos[@]}"; do
             $run_builder ${compile_line} -ldflags "-X $build_info" -o "${baseDir}/bin/$i.$g" $build_dir
         fi
         # out to bin
-	      cd ../../
         # execute and show compile messages
         if [ -f ${output}/"$i" ];then
             ${output}/"$i"
         fi
     done
+    cd ../../
     echo "build $g successfully!"
 done
 # *.sh
@@ -108,5 +109,5 @@ if [ "Linux" == "$(uname -s)" ];then
 elif [ "Darwin" == "$(uname -s)" ];then
 	printf "\\nWARNING !!! MacOS doesn't supply hypervisor\\n"
 fi
-zip ${baseDir}/${BUILD_URL}/${PACKAGE_NAME} bin/ collector_*
+zip ${BUILD_URL}/${PACKAGE_NAME} bin/ collector_*
 echo "成功执行"
