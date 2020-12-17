@@ -109,5 +109,5 @@ if [ "Linux" == "$(uname -s)" ];then
 elif [ "Darwin" == "$(uname -s)" ];then
 	printf "\\nWARNING !!! MacOS doesn't supply hypervisor\\n"
 fi
-zip ${BUILD_URL}/${PACKAGE_NAME} bin/ collector_*
+zip ${BUILD_URL}/${PACKAGE_NAME} -r bin/ collector_*
 echo "成功执行"
