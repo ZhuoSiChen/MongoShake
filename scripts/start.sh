@@ -32,4 +32,3 @@ if [ $GOMAXPROCS != 0 ] ; then
 else
         ./hypervisor --daemon --exec="./$name -conf=${binfatherDir}/collector_${env}.conf 1>> $name.output 2>&1" 1>>hypervisor.output 2>&1
 fi
-~
