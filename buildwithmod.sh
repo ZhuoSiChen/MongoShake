@@ -86,6 +86,7 @@ for g in "${goos[@]}"; do
         else
             $run_builder ${compile_line} -ldflags "-X $build_info" -o "${baseDir}/bin/$i.$g" $build_dir
         fi
+        # out to bin
 	      cd ../../
         # execute and show compile messages
         if [ -f ${output}/"$i" ];then
@@ -107,3 +108,5 @@ if [ "Linux" == "$(uname -s)" ];then
 elif [ "Darwin" == "$(uname -s)" ];then
 	printf "\\nWARNING !!! MacOS doesn't supply hypervisor\\n"
 fi
+zip baseDir/${BUILD_URL}/${PACKAGE_NAME} bin/ collector_*
+echo "成功执行"
