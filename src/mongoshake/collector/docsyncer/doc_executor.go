@@ -146,7 +146,7 @@ func NewBulkProcessor(client *elastic.Client) (bulk *elastic.BulkProcessor, err 
 	return bulkService.Do(context.Background())
 }
 
-//同步写的逻辑
+//同步读的逻辑
 func (colExecutor *CollectionExecutor) Sync(docs []*bson.Raw) {
 	count := uint64(len(docs))
 	if count == 0 {
@@ -401,6 +401,9 @@ func (exec *DocExecutor) doSync(docs []*bson.Raw) error {
 			req.DocAsUpsert(true)
 			if _, err := req.Source(); err == nil {
 				exec.esbulk.Add(req)
+			} else {
+				LOG.Error(err)
+				return err
 			}
 		}
 		//exec.esbulk
