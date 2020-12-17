@@ -47,7 +47,12 @@ func (tunnel *ESWriter) Send(message *WMessage) int64 {
 		bson.Unmarshal(byteArray, &m)
 		if m["op"] == "u" || m["op"] == "i" {
 			doc := getUpdateOrInsertDoc(m)
-			tunnel.bulk.Add(doc)
+			if _, err := doc.Source(); err == nil {
+				tunnel.bulk.Add(doc)
+			} else {
+				LOG.Error(err)
+				return -1
+			}
 		} else if m["op"] == "d" {
 			id := getOplogObjectId(m)
 			delDoc(id.Hex(), m["ns"].(string), tunnel)
@@ -103,14 +108,16 @@ func getUpdateOrInsertDoc(oplog map[string]interface{}) *elastic.BulkUpdateReque
 	req := elastic.NewBulkUpdateRequest()
 	i := oplog["ns"].(string)
 	m2 := oplog["o"].(map[string]interface{})
-	id := m2["_id"].(bson.ObjectId)
-	delete(m2, "_id")
-	req.Index(i)
-	req.Type("_doc")
-	req.Id(id.Hex())
-	req.DocAsUpsert(true)
-	req.UseEasyJSON(true)
-	req.Doc(m2)
+	if m2 != nil {
+		id := m2["_id"].(bson.ObjectId)
+		delete(m2, "_id")
+		req.Index(i)
+		req.Type("_doc")
+		req.Id(id.Hex())
+		req.DocAsUpsert(true)
+		req.UseEasyJSON(true)
+		req.Doc(m2)
+	}
 	return req
 }
 func delDoc(id string, ns string, tunnel *ESWriter) {
