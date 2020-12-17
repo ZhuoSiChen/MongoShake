@@ -81,6 +81,11 @@ for g in "${goos[@]}"; do
         done
 
         # build
+        cd "src/mongoshake"
+        go mod tidy
+#       go build -v -ldflags '-X mongoshake/common.BRANCH=unknown,0.0,debug,go1.15.6,2020-12-16_19:54:17 -X mongoshake/common.SIGNALPROFILE=31 -X mongoshake/common.SIGNALSTACK=30' '-gcflags=-N -l' -o bin/collector.linux -tags debug src/mongoshake/collector/main/collector.go src/mongoshake/collector/main/sanitize.go
+
+        go build
         if [ $DEBUG -eq 1 ]; then
             $run_builder ${compile_line} -ldflags "-X $build_info" -gcflags='-N -l' -o "bin/$i.$g" -tags "debug" $all_files
         else
