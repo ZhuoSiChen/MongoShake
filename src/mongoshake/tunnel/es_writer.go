@@ -48,11 +48,15 @@ func (tunnel *ESWriter) Send(message *WMessage) int64 {
 		bson.Unmarshal(byteArray, &m)
 		if m["op"] == "u" || m["op"] == "i" {
 			doc := getUpdateOrInsertDoc(m)
-			if _, err := doc.Source(); err == nil {
-				tunnel.bulk.Add(doc)
+			if doc != nil {
+				if _, err := doc.Source(); err == nil {
+					tunnel.bulk.Add(doc)
+				} else {
+					LOG.Error(err)
+					return -1
+				}
 			} else {
-				LOG.Error(err)
-				return -1
+				LOG.Info("met some update o == nil")
 			}
 		} else if m["op"] == "d" {
 			id := getOplogObjectId(m)
