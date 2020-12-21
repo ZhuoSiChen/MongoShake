@@ -109,7 +109,8 @@ func getUpdateOrInsertDoc(oplog map[string]interface{}) *elastic.BulkUpdateReque
 	req := elastic.NewBulkUpdateRequest()
 	i := oplog["ns"].(string)
 	m2 := oplog["o"].(map[string]interface{})
-	if !isNilFixed(m2) {
+
+	if len(m2) != 0 {
 		id := m2["_id"].(bson.ObjectId)
 		delete(m2, "_id")
 		req.Index(i)
