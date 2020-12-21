@@ -8,6 +8,7 @@ import (
 	mogobson "go.mongodb.org/mongo-driver/bson"
 	docyncer "mongoshake/collector/docsyncer"
 	"mongoshake/tunnel/kafka"
+	"reflect"
 )
 
 type ESWriter struct {
@@ -108,7 +109,7 @@ func getUpdateOrInsertDoc(oplog map[string]interface{}) *elastic.BulkUpdateReque
 	req := elastic.NewBulkUpdateRequest()
 	i := oplog["ns"].(string)
 	m2 := oplog["o"].(map[string]interface{})
-	if m2 != nil {
+	if !isNilFixed(m2) {
 		id := m2["_id"].(bson.ObjectId)
 		delete(m2, "_id")
 		req.Index(i)
@@ -119,6 +120,17 @@ func getUpdateOrInsertDoc(oplog map[string]interface{}) *elastic.BulkUpdateReque
 		req.Doc(m2)
 	}
 	return req
+}
+
+func isNilFixed(i interface{}) bool {
+	if i == nil {
+		return true
+	}
+	switch reflect.TypeOf(i).Kind() {
+	case reflect.Ptr, reflect.Map, reflect.Array, reflect.Chan, reflect.Slice:
+		return reflect.ValueOf(i).IsNil()
+	}
+	return false
 }
 func delDoc(id string, ns string, tunnel *ESWriter) {
 	req := elastic.NewBulkDeleteRequest()
