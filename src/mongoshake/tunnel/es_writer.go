@@ -110,8 +110,8 @@ func getUpdateOrInsertDoc(oplog map[string]interface{}) *elastic.BulkUpdateReque
 	i := oplog["ns"].(string)
 	m2 := oplog["o"].(map[string]interface{})
 
-	if len(m2) != 0 {
-		id := m2["_id"].(bson.ObjectId)
+	id, ok := m2["_id"].(bson.ObjectId)
+	if ok {
 		delete(m2, "_id")
 		req.Index(i)
 		req.Type("_doc")
@@ -119,8 +119,9 @@ func getUpdateOrInsertDoc(oplog map[string]interface{}) *elastic.BulkUpdateReque
 		req.DocAsUpsert(true)
 		req.UseEasyJSON(true)
 		req.Doc(m2)
+		return req
 	}
-	return req
+	return nil
 }
 
 func isNilFixed(i interface{}) bool {
