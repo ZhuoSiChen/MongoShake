@@ -57,7 +57,7 @@ func GetDbNamespace(url string) ([]utils.NS, map[string][]string, error) {
 	var err error
 	var conn *utils.MongoConn
 	if conn, err = utils.NewMongoConn(url, utils.VarMongoConnectModeSecondaryPreferred, true,
-			utils.ReadWriteConcernLocal, utils.ReadWriteConcernDefault); conn == nil || err != nil {
+		utils.ReadWriteConcernLocal, utils.ReadWriteConcernDefault); conn == nil || err != nil {
 		return nil, nil, err
 	}
 	defer conn.Close()
@@ -299,7 +299,7 @@ func (reader *DocumentReader) ensureNetwork() (err error) {
 
 	if reader.client == nil {
 		reader.client, err = utils.NewMongoCommunityConn(reader.src, conf.Options.MongoConnectMode, true,
-				utils.ReadWriteConcernLocal, utils.ReadWriteConcernDefault)
+			utils.ReadWriteConcernLocal, utils.ReadWriteConcernDefault)
 		if err != nil {
 			return err
 		}
