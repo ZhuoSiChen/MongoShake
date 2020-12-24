@@ -135,7 +135,7 @@ func afterBulk(executionID int64, requests []elastic.BulkableRequest, response *
 }
 
 func NewBulkProcessor(client *elastic.Client) (bulk *elastic.BulkProcessor, err error) {
-	bulkService := client.BulkProcessor().Name("monstache")
+	bulkService := client.BulkProcessor().Name("mongoshake")
 	bulkService.Workers(1)
 	bulkService.Stats(true)
 	bulkService.BulkActions(-1)
@@ -355,9 +355,6 @@ func (exec *DocExecutor) doSync(docs []*bson.Raw) error {
 			docBeg["_id"], docEnd["_id"])
 	}
 
-	if conf.Options.LogLevel == utils.VarLogLevelDebug {
-
-	}
 	//bson.Unmarshal(docs[0].Data,&m)
 	//id := m["_id"].(bson.ObjectId)
 	//LOG.Debug("aaaa [%v]",id.Hex())
@@ -387,7 +384,6 @@ func (exec *DocExecutor) doSync(docs []*bson.Raw) error {
 		for i := 0; i < len(docs); i++ {
 			var m map[string]interface{}
 			bson.Unmarshal(docs[i].Data, &m)
-			LOG.Debug("%v", m["_id"])
 			req := elastic.NewBulkUpdateRequest()
 			req.UseEasyJSON(true)
 			//i2 := docList[i]
