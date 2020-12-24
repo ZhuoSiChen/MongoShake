@@ -35,6 +35,10 @@ if [ -z "$DEBUG" ]; then
     DEBUG=0
 fi
 
+
+go env -w GO111MODULE=on
+go env -w GOPROXY=https://goproxy.cn,direct
+
 info="mongoshake/common.BRANCH=$branch"
 # inject program information about compile
 if [ $DEBUG -eq 1 ]; then
