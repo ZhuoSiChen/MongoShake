@@ -1,9 +1,9 @@
 package conf
 
 import (
-	"mongoshake/common"
-
+	"fmt"
 	"github.com/getlantern/deepcopy"
+	"github.com/vinllen/log4go"
 )
 
 type Configuration struct {
@@ -99,27 +99,38 @@ func (configuration *Configuration) IsShardCluster() bool {
 
 var Options Configuration
 
+var Eslog log4go.Logger
+
+func InitialESLogger(logDir string) log4go.Logger {
+	filename := "es.log"
+	writer := log4go.NewFileLogWriter(fmt.Sprintf("%s/%s", logDir, filename), false)
+	logger := log4go.Logger{
+		"eslog": &log4go.Filter{2, writer},
+	}
+	return logger
+}
+
 func GetSafeOptions() Configuration {
 	polish := new(Configuration)
 	deepcopy.Copy(polish, &Options)
 
-	// modify mongo_ulrs
-	for i := range Options.MongoUrls {
-		polish.MongoUrls[i] = utils.BlockMongoUrlPassword(Options.MongoUrls[i], "***")
-	}
-	// modify mongo_cs_url
-	polish.MongoCsUrl = utils.BlockMongoUrlPassword(Options.MongoCsUrl, "***")
-	// modify mongo_s_url
-	polish.MongoSUrl = utils.BlockMongoUrlPassword(Options.MongoSUrl, "***")
-	// modify tunnel.address
-	for i := range Options.TunnelAddress {
-		polish.TunnelAddress[i] = utils.BlockMongoUrlPassword(Options.TunnelAddress[i], "***")
-	}
-	for i := range Options.IncrSyncTunnelAddress {
-		polish.IncrSyncTunnelAddress[i] = utils.BlockMongoUrlPassword(Options.IncrSyncTunnelAddress[i], "***")
-	}
-	// modify storage url
-	polish.CheckpointStorageUrl = utils.BlockMongoUrlPassword(Options.CheckpointStorageUrl, "***")
+	//// modify mongo_ulrs
+	//for i := range Options.MongoUrls {
+	//	polish.MongoUrls[i] = utils.BlockMongoUrlPassword(Options.MongoUrls[i], "***")
+	//}
+	//// modify mongo_cs_url
+	//polish.MongoCsUrl = utils.BlockMongoUrlPassword(Options.MongoCsUrl, "***")
+	//// modify mongo_s_url
+	//polish.MongoSUrl = utils.BlockMongoUrlPassword(Options.MongoSUrl, "***")
+	//// modify tunnel.address
+	//for i := range Options.TunnelAddress {
+	//	polish.TunnelAddress[i] = utils.BlockMongoUrlPassword(Options.TunnelAddress[i], "***")
+	//}
+	//for i := range Options.IncrSyncTunnelAddress {
+	//	polish.IncrSyncTunnelAddress[i] = utils.BlockMongoUrlPassword(Options.IncrSyncTunnelAddress[i], "***")
+	//}
+	//// modify storage url
+	//polish.CheckpointStorageUrl = utils.BlockMongoUrlPassword(Options.CheckpointStorageUrl, "***")
 
 	return *polish
 }

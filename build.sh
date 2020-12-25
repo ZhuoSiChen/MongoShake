@@ -87,9 +87,9 @@ for g in "${goos[@]}"; do
 
         go build
         if [ $DEBUG -eq 1 ]; then
-            $run_builder ${compile_line} -ldflags "-X $build_info" -gcflags='-N -l' -o "bin/$i.$g" -tags "debug" $all_files
+            $run_builder ${compile_line} -ldflags "-X $build_info" -gcflags="all=-N -l" -o "bin/$i.$g" -tags "debug" $all_files
         else
-            $run_builder ${compile_line} -ldflags "-X $build_info" -o "bin/$i.$g" $all_files
+            $run_builder ${compile_line} -ldflags "-X $build_info" -gcflags="all=-N -l" -o "bin/$i.$g" $all_files
         fi
 
         # execute and show compile messages

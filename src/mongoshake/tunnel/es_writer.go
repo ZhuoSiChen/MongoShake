@@ -3,19 +3,20 @@ package tunnel
 import (
 	"context"
 	"github.com/olivere/elastic"
-	LOG "github.com/vinllen/log4go"
+	"github.com/vinllen/mgo"
 	"github.com/vinllen/mgo/bson"
 	mogobson "go.mongodb.org/mongo-driver/bson"
+	conf "mongoshake/collector/configure"
 	docyncer "mongoshake/collector/docsyncer"
-	"mongoshake/tunnel/kafka"
-	"reflect"
+	utils "mongoshake/common"
+	"strings"
 )
 
 type ESWriter struct {
 	RemoteAddr string
 	client     *elastic.Client
-	writer     *kafka.SyncWriter
 	bulk       *elastic.BulkProcessor
+	db         *mgo.Database
 }
 
 func (tunnel *ESWriter) Name() string {
@@ -23,16 +24,24 @@ func (tunnel *ESWriter) Name() string {
 }
 
 func (tunnel *ESWriter) Prepare() bool {
+	conf.Eslog.Info("aaaaaaaaaaaaaaaaaaaaa")
+
 	client, err := docyncer.NewElasticClient(tunnel.RemoteAddr)
 	if err != nil {
-		LOG.Critical("ESClient prepare[%v] create writer error[%v]", tunnel.RemoteAddr, err)
+		conf.Eslog.Critical("ESClient prepare[%v] create writer error[%v]", tunnel.RemoteAddr, err)
 		return false
 	}
+
 	processor, err := docyncer.NewBulkProcessor(client)
 	if err != nil {
-		LOG.Critical("ESClient prepare[%v] create writer error[%v]", tunnel.RemoteAddr, err)
+		conf.Eslog.Critical("ESClient prepare[%v] create writer error[%v]", tunnel.RemoteAddr, err)
 		return false
 	}
+	conn, err := utils.NewMongoConn(conf.GetSafeOptions().MongoUrls[0], conf.Options.MongoConnectMode, true,
+		utils.ReadWriteConcernDefault, utils.ReadWriteConcernDefault)
+	s := conf.GetSafeOptions().FilterNamespaceWhite[0]
+	split := strings.Split(s, ".")
+	tunnel.db = conn.Session.DB(split[0])
 	tunnel.bulk = processor
 	tunnel.client = client
 	return true
@@ -43,47 +52,46 @@ func (tunnel *ESWriter) Send(message *WMessage) int64 {
 		return 0
 	}
 	var m = make(map[string]interface{})
-	for index, byteArray := range message.TMessage.RawLogs {
-		LOG.Debug(index)
+	for _, byteArray := range message.TMessage.RawLogs {
 		bson.Unmarshal(byteArray, &m)
 		if m["op"] == "u" || m["op"] == "i" {
-			doc := getUpdateOrInsertDoc(m)
+			doc := tunnel.getUpdateOrInsertDoc(m)
 			if doc != nil {
 				if _, err := doc.Source(); err == nil {
 					tunnel.bulk.Add(doc)
 				} else {
-					LOG.Error(err)
+					conf.Eslog.Error(err)
 					return -1
 				}
 			} else {
-				LOG.Info("met some update o == nil")
+				conf.Eslog.Info("met some update o == nil")
 			}
 		} else if m["op"] == "d" {
 			id := getOplogObjectId(m)
 			delDoc(id.Hex(), m["ns"].(string), tunnel)
 		}
-		LOG.Debug("byteArray = %v", m)
+		conf.Eslog.Debug("byteArray = %v", m)
 	}
 	for _, log := range message.ParsedLogs {
 		object := log.ParsedLog.Object
 		jsonDocument, err := mogobson.MarshalExtJSON(object, true, true)
 		if err != nil && jsonDocument != nil {
-			LOG.Error(err)
+			conf.Eslog.Error(err)
 		}
-		//LOG.Debug("jsondocument = %v", jsonDocument)
+		//conf.Eslog.Debug("jsondocument = %v", jsonDocument)
 		//d := log.ParsedLog.Object.Map()
 		//keys := make(map[string]interface{})
 		//bytes := []byte(fmt.Sprintf("%v", log.ParsedLog.Object))
 		//
 		//bson.Unmarshal(bytes, keys)
-		//LOG.Debug("Unmarshal: keys= %v", keys)
+		//conf.Eslog.Debug("Unmarshal: keys= %v", keys)
 		//m, txt := oplog.ConvertBsonD2M(log.ParsedLog.Object)
 		//
 		////log.ParsedLog
-		//LOG.Debug("m=%v  aa=%v", m, txt)
+		//conf.Eslog.Debug("m=%v  aa=%v", m, txt)
 		////delete(log.ParsedLog,"")
 		//id := log.ParsedLog.Object[0].Value.(bson.ObjectId).Hex()
-		//LOG.Debug("d = %v ", d)
+		//conf.Eslog.Debug("d = %v ", d)
 		//if log.Operation == "u" || log.Operation == "i" {
 		//	req := elastic.NewBulkUpdateRequest()
 		//	req.Index()
@@ -97,7 +105,7 @@ func (tunnel *ESWriter) Send(message *WMessage) int64 {
 		//} else if log.Operation == "d" {
 		//	delDoc(id, log.Namespace, tunnel)
 		//}
-		//LOG.Debug("拿到log 数据格式为 %v ", log)
+		//conf.Eslog.Debug("拿到log 数据格式为 %v ", log)
 
 	}
 	return ReplyOK
@@ -109,35 +117,42 @@ func getOplogObjectId(oplog map[string]interface{}) bson.ObjectId {
 	return id
 }
 
-func getUpdateOrInsertDoc(oplog map[string]interface{}) *elastic.BulkUpdateRequest {
+func (tunnel *ESWriter) getUpdateOrInsertDoc(oplog map[string]interface{}) *elastic.BulkUpdateRequest {
 	req := elastic.NewBulkUpdateRequest()
-	i := oplog["ns"].(string)
-	m2 := oplog["o"].(map[string]interface{})
-
-	id, ok := m2["_id"].(bson.ObjectId)
+	ns := oplog["ns"].(string)
+	o := oplog["o"].(map[string]interface{})
+	id, ok := o["_id"].(bson.ObjectId)
 	if ok {
-		delete(m2, "_id")
-		req.Index(i)
+		delete(o, "_id")
+		req.Index(ns)
 		req.Type("_doc")
 		req.Id(id.Hex())
 		req.DocAsUpsert(true)
 		req.UseEasyJSON(true)
-		req.Doc(m2)
+		req.Doc(o)
 		return req
+	} else {
+		ns := oplog["ns"].(string)
+		o2 := oplog["o2"].(map[string]interface{})
+		objectId := o2["_id"].(bson.ObjectId)
+		split := strings.Split(ns, ".")
+		var m map[string]interface{}
+		err := tunnel.db.C(split[1]).FindId(objectId).One(&m)
+		if err == nil {
+			delete(m, "_id")
+			req.Index(ns)
+			req.Type("_doc")
+			req.Id(objectId.Hex())
+			req.DocAsUpsert(true)
+			req.UseEasyJSON(true)
+			req.Doc(m)
+			return req
+		}
+
 	}
 	return nil
 }
 
-func isNilFixed(i interface{}) bool {
-	if i == nil {
-		return true
-	}
-	switch reflect.TypeOf(i).Kind() {
-	case reflect.Ptr, reflect.Map, reflect.Array, reflect.Chan, reflect.Slice:
-		return reflect.ValueOf(i).IsNil()
-	}
-	return false
-}
 func delDoc(id string, ns string, tunnel *ESWriter) {
 	req := elastic.NewBulkDeleteRequest()
 	search := tunnel.client.Search()
@@ -149,7 +164,7 @@ func delDoc(id string, ns string, tunnel *ESWriter) {
 	req.UseEasyJSON(true)
 	searchResult, err := search.Do(context.Background())
 	if err != nil {
-		LOG.Debug("Unable to delete document %s: %s",
+		conf.Eslog.Error("Unable to delete document %s: %s",
 			id, err)
 	}
 	if searchResult.Hits != nil && searchResult.Hits.TotalHits == 1 {
@@ -163,7 +178,7 @@ func delDoc(id string, ns string, tunnel *ESWriter) {
 			req.Parent(hit.Parent)
 		}
 	} else {
-		LOG.Debug("Failed to find unique document %s", id)
+		conf.Eslog.Error("Failed to find unique document %s", id)
 	}
 }
 

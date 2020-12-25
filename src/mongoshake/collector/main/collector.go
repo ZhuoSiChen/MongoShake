@@ -65,6 +65,12 @@ func main() {
 			conf.Options.LogFileName, err), -2)
 	}
 
+	if logger := conf.InitialESLogger(conf.Options.LogDirectory); logger != nil {
+		conf.Eslog = logger
+		crash(fmt.Sprintf("initial log.dir[%v] log.name[%v] failed[%v].", conf.Options.LogDirectory,
+			conf.Options.LogFileName, logger), -2)
+	}
+
 	conf.Options.Version = utils.BRANCH
 
 	nimo.Profiling(int(conf.Options.SystemProfilePort))

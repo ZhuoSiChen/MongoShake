@@ -123,14 +123,14 @@ func afterBulk(executionID int64, requests []elastic.BulkableRequest, response *
 				}
 				json, err := json.Marshal(item)
 				if err != nil {
-					LOG.Error("Unable to marshal bulk response item: %s", err)
+					conf.Eslog.Error("Unable to marshal bulk response item: %s", err)
 				} else {
-					LOG.Error("Bulk response item: %s", string(json))
+					conf.Eslog.Error("Bulk response item: %s", string(json))
 				}
 			}
 		}
 	} else {
-		LOG.Error("ES Response %v", response)
+		conf.Eslog.Error("ES Response %v %v", response, &response.Items)
 	}
 }
 
@@ -241,7 +241,7 @@ func (colExecutor *CollectionExecutor) startToSyncToES() error {
 		//在此初始化写的executor
 		processor, err := NewBulkProcessor(colExecutor.esSyncer.client)
 		if err != nil {
-			LOG.Error("连不上es bulk")
+			conf.Eslog.Error("连不上es bulk")
 			return err
 		}
 		executors[i] = NewDocExecutorToES(GenerateDocExecutorId(), colExecutor, processor, colExecutor.esSyncer)
@@ -351,7 +351,7 @@ func (exec *DocExecutor) doSync(docs []*bson.Raw) error {
 		var docBeg, docEnd bson.M
 		bson.Unmarshal(docs[0].Data, &docBeg)
 		bson.Unmarshal(docs[len(docs)-1].Data, &docEnd)
-		LOG.Debug("ESSyncer id[%v] doSync with table[%v] batch _id interval [%v, %v]", exec.essyncer.id, ns,
+		conf.Eslog.Debug("ESSyncer id[%v] doSync with table[%v] batch _id interval [%v, %v]", exec.essyncer.id, ns,
 			docBeg["_id"], docEnd["_id"])
 	}
 
@@ -398,7 +398,7 @@ func (exec *DocExecutor) doSync(docs []*bson.Raw) error {
 			if _, err := req.Source(); err == nil {
 				exec.esbulk.Add(req)
 			} else {
-				LOG.Error(err)
+				conf.Eslog.Error(err)
 				return err
 			}
 		}
